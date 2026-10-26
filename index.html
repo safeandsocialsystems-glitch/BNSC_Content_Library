@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101010">
+  <meta name="description" content="BNSCコンテンツライブラリ。動画・研究解説をキーワードやテーマで探せます。">
+  <title>BNSC | コンテンツライブラリ</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#results">検索結果に移動</a>
+  <header class="site-header">
+    <div class="wrap navbar">
+      <a class="brand" href="./" aria-label="BNSC ライブラリのトップに戻る">
+        <span class="brand-mark" aria-hidden="true">N<span class="brand-slice"></span></span>
+        <span class="brand-name"><strong>BNSC</strong><small>Brain & Neuro Solution Center</small></span>
+      </a>
+      <a class="campfire-link" href="https://community.camp-fire.jp/projects/view/666070" target="_blank" rel="noopener noreferrer">
+        <span>コミュニティページ</span>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7M10 14 21 3M21 13v8H3V3h8"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="wrap hero-content">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-line"></span> BNSC MEMBERS LIBRARY</p>
+          <h1 id="hero-title">探したい学びに、<br><span>すぐに出会える。</span></h1>
+          <p class="hero-description">トレーニング・リハビリ・療育・脳機能。<br>動画や研究解説を、テーマやキーワードから検索できます。</p>
+          <form id="search-form" class="search-box" role="search" autocomplete="off">
+            <svg aria-hidden="true" class="search-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <label for="search-input" class="visually-hidden">動画・研究解説を検索</label>
+            <input id="search-input" type="search" enterkeyhint="search" placeholder="例：前庭、小脳、ASD、姿勢制御、VORC" aria-controls="results-grid">
+            <button type="submit" id="search-button">検索</button>
+          </form>
+          <div class="quick-search" aria-label="キーワード検索例">
+            <span>キーワード例</span>
+            <button type="button" data-keyword="前庭">前庭</button>
+            <button type="button" data-keyword="小脳">小脳</button>
+            <button type="button" data-keyword="ASD">ASD</button>
+            <button type="button" data-keyword="姿勢制御">姿勢制御</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="wrap page-content">
+      <div id="demo-notice" class="demo-notice" role="status" hidden>
+        <span class="demo-badge">デモ</span>
+        現在は操作確認用のサンプルデータです。実際のBNSC投稿URLはまだ登録されていません。
+      </div>
+      <div class="intro-strip">
+        <div><p class="section-kicker">LIBRARY</p><h2>コンテンツを探す</h2></div>
+        <p class="intro-caption">ジャンル・テーマ・形式から、学びたい内容を絞り込めます。</p>
+      </div>
+      <div class="library-layout">
+        <aside class="sidebar" aria-label="検索フィルター">
+          <div class="filter-title-row"><h3>絞り込み</h3><div class="filter-head-actions"><button type="button" id="clear-filters" class="text-button">すべて解除</button><button type="button" id="filters-mobile-toggle" class="filter-mobile-toggle" aria-controls="filter-content" aria-expanded="false">条件を表示 ▾</button></div></div>
+          <div class="filter-content" id="filter-content">
+            <section class="filter-section" aria-labelledby="type-heading"><h4 id="type-heading">コンテンツ形式</h4><div class="filter-options" id="type-filters"></div></section>
+            <section class="filter-section" aria-labelledby="category-heading"><h4 id="category-heading">専門領域</h4><div class="filter-options" id="category-filters"></div></section>
+            <section class="filter-section" aria-labelledby="topic-heading"><h4 id="topic-heading">テーマ</h4><div class="tag-options" id="tag-filters"></div></section>
+          </div>
+        </aside>
+        <section class="results" id="results" aria-labelledby="results-title">
+          <div class="results-toolbar">
+            <div><p class="section-kicker">CONTENT COLLECTION</p><h3 id="results-title">検索結果 <span id="result-count" class="result-count">0件</span></h3></div>
+            <div class="toolbar-actions">
+              <button type="button" id="bookmark-toggle" class="bookmark-toggle" aria-pressed="false"><span aria-hidden="true">☆</span> あとで見る</button>
+              <label class="visually-hidden" for="sort-select">並べ替え</label>
+              <select id="sort-select" aria-label="並べ替え">
+                <option value="new">新しい順</option>
+                <option value="old">古い順</option>
+                <option value="title">タイトル順</option>
+              </select>
+            </div>
+          </div>
+          <div id="active-filters" class="active-filters" aria-live="polite"></div>
+          <div id="results-grid" class="results-grid" aria-live="polite" aria-busy="true"></div>
+          <div id="empty-state" class="empty-state" hidden><div class="empty-symbol" aria-hidden="true">⌕</div><h4>該当するコンテンツがありません</h4><p>キーワードを短くするか、絞り込み条件を変更してください。</p><button type="button" id="empty-reset">条件をリセット</button></div>
+        </section>
+      </div>
+      <section class="help-section" aria-labelledby="help-title"><div><p class="section-kicker">HOW TO USE</p><h2 id="help-title">動画を見るまでの流れ</h2></div><div class="steps"><div class="step"><span>01</span><strong>探す</strong><p>キーワードや分野で絞り込む</p></div><div class="step"><span>02</span><strong>選ぶ</strong><p>気になる動画・記事を開く</p></div><div class="step"><span>03</span><strong>学ぶ</strong><p>CAMPFIREにログインして閲覧する</p></div></div><p class="help-note">※ このアプリはコンテンツの「検索目次」です。限定公開コンテンツを開くには、CAMPFIREで該当プランの会員資格が必要です。</p></section>
+    </div>
+  </main>
+  <footer class="footer"><div class="wrap footer-inner"><div><strong>BNSC</strong><span>Brain & Neuro Solution Center</span></div><p>世界の研究知見を、日々の学びに。</p><a href="https://community.camp-fire.jp/projects/view/666070" target="_blank" rel="noopener noreferrer">CAMPFIREコミュニティを開く ↗</a></div></footer>
+</body>
+</html>

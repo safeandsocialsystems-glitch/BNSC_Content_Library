@@ -1,0 +1,23 @@
+name: Test Vimeo connection (no publishing)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tests -v
+      - name: Verify authenticated account and all tagged videos without writing files
+        env:
+          VIMEO_ACCESS_TOKEN: ${{ secrets.VIMEO_ACCESS_TOKEN }}
+          VIMEO_USER_ID: ${{ vars.VIMEO_USER_ID }}
+        run: python3 scripts/sync_vimeo.py --check
