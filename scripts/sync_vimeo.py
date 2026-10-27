@@ -7,6 +7,7 @@ import math
 import os
 import re
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
@@ -68,10 +69,11 @@ def tag_names(video):
     return sorted(set(t['name'] for t in tags))
 
 
-def inventory(client, owner):
-    path = '/me/videos?' + urlencode({'per_page': 100, 'sort': 'date', 'direction': 'asc', 'fields': 'uri,tags,user.uri'})
+def inventory(client, owner, diagnose=False):
+    path = '/me/videos?' + urlencode({'per_page': 100, 'sort': 'date', 'direction': 'asc', 'fields': 'uri,tags,user.uri,privacy.view'})
     seen_pages, videos = set(), {}
     total = None
+    unlisted = 0
     while path:
         if path in seen_pages or len(seen_pages) >= 10000:
             raise SyncError('ページネーションが不正です。')
@@ -89,6 +91,7 @@ def inventory(client, owner):
             if ident in videos:
                 raise SyncError('一覧の重複を検出しました。次回再試行します。')
             videos[ident] = tag_names(video)
+            unlisted += video.get('privacy', {}).get('view') == 'unlisted'
         following = page['paging']['next']
         if following is not None:
             if not isinstance(following, str) or not following:
@@ -101,6 +104,15 @@ def inventory(client, owner):
             path = None
     if len(videos) != total:
         raise SyncError('全動画の取得を確認できませんでした。')
+    if diagnose:
+        print('DIAGNOSTIC ' + json.dumps({
+            'pages': len(seen_pages), 'api_total': total, 'fetched': len(videos),
+            'all_owners_match': True, 'unlisted_count': unlisted,
+            'videos_with_tags': sum(bool(tags) for tags in videos.values()),
+            'exact_BNSC': sum('BNSC' in tags for tags in videos.values()),
+            'case_insensitive_BNSC': sum(any(t.casefold() == 'bnsc' for t in tags) for tags in videos.values()),
+            'normalized_BNSC': sum(any(unicodedata.normalize('NFKC', t).strip().casefold() == 'bnsc' for t in tags) for tags in videos.values()),
+        }, sort_keys=True))
     return videos
 
 
@@ -178,7 +190,7 @@ def convert(video, owner, token, additional_secrets=()):
                 published_at=published, thumbnail_url=thumbnail, url='')
 
 
-def collect(client, account_id):
+def collect(client, account_id, diagnose=False):
     if not re.fullmatch(r'\d+', account_id):
         raise SyncError('VIMEO_USER_ID に自分の数値ユーザーIDを設定してください。')
     auth = client.get('/oauth/verify')
@@ -187,7 +199,9 @@ def collect(client, account_id):
     owner = '/users/' + account_id
     if client.get('/me?fields=uri').get('uri') != owner:
         raise SyncError('トークンの所有者が VIMEO_USER_ID と一致しません。')
-    before = inventory(client, owner)
+    if diagnose:
+        print('DIAGNOSTIC account_matches_config=true public_scope=true private_scope=true')
+    before = inventory(client, owner, diagnose)
     raw_videos = []
     for ident, tags in sorted(before.items()):
         if 'BNSC' not in tags:
@@ -222,8 +236,8 @@ def atomic_write(path, data):
     temporary.replace(path)
 
 
-def synchronize(client, account_id, csv_path, output, check=False):
-    items = collect(client, account_id)
+def synchronize(client, account_id, csv_path, output, check=False, diagnose=False):
+    items = collect(client, account_id, diagnose)
     payload = merged_payload(csv_path, items)
     if not check:
         atomic_write(output, payload)
@@ -234,7 +248,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--token-file', type=Path, help='公開フォルダー外のトークンファイル')
     parser.add_argument('--check', action='store_true', help='実API接続・全件検証のみ。ファイル変更なし')
+    parser.add_argument('--diagnose', action='store_true', help='--check専用: 秘密情報を含まない集計のみ出力')
     args = parser.parse_args()
+    if args.diagnose and not args.check:
+        raise SyncError('--diagnose は --check と併用してください。')
     token = os.environ.get('VIMEO_ACCESS_TOKEN', '').strip()
     if args.token_file:
         resolved = args.token_file.resolve()
@@ -243,7 +260,7 @@ def main():
         token = resolved.read_text().strip()
     if not token:
         raise SyncError('VIMEO_ACCESS_TOKEN または --token-file が未設定です。')
-    payload = synchronize(Vimeo(token), os.environ.get('VIMEO_USER_ID', ''), ROOT / 'contents.csv', ROOT / 'data' / 'contents.json', args.check)
+    payload = synchronize(Vimeo(token), os.environ.get('VIMEO_USER_ID', ''), ROOT / 'contents.csv', ROOT / 'data' / 'contents.json', args.check, args.diagnose)
     print(f'Vimeo全件検証成功: BNSC {payload["vimeo_sync"]["count"]}件 / 検索対象 {len(payload["items"])}件 / ' + ('接続テストのみ' if args.check else '検索JSON更新完了'))
 
 
