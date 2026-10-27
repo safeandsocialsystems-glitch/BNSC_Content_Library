@@ -1,4 +1,6 @@
 """Synthetic fixtures only; no credentials, no real Vimeo videos."""
+import contextlib
+import io
 import copy
 import csv
 import json
@@ -56,6 +58,19 @@ class VimeoSyncTest(unittest.TestCase):
         self.csv.write_text(','.join(csv_import.HEADERS + ['status']) + '\n', encoding='utf-8')
     def run_sync(self, videos, **kwargs):
         return sync.synchronize(FakeVimeo(videos, **kwargs), '42', self.csv, self.output)
+    def test_diagnostics_log_only_aggregate_counts(self):
+        output = io.StringIO()
+        v = video()
+        v['privacy'] = {'view': 'unlisted'}
+        with contextlib.redirect_stdout(output):
+            sync.collect(FakeVimeo([v]), '42', diagnose=True)
+        report = output.getvalue()
+        self.assertIn('"fetched": 1', report)
+        self.assertIn('"exact_BNSC": 1', report)
+        self.assertIn('"unlisted_count": 1', report)
+        for secret in (v['name'], v['description'], v['link'], 'fakehashABC', FakeVimeo.token, '/users/42'):
+            self.assertNotIn(secret, report)
+
     def test_tag_approval_and_stable_id(self):
         payload = self.run_sync([video(), video('456', tags=('other',))])
         self.assertEqual([v['id'] for v in payload['items']], ['vimeo-123'])

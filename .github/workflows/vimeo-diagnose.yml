@@ -1,0 +1,28 @@
+name: Diagnose Vimeo detection (no publishing)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Compare original zero-result implementation against the live API
+        env:
+          VIMEO_ACCESS_TOKEN: ${{ secrets.VIMEO_ACCESS_TOKEN }}
+          VIMEO_USER_ID: ${{ vars.VIMEO_USER_ID }}
+        run: |
+          git show 48b5be475be5995f7c029b663e7e1822e97426ee:scripts/sync_vimeo.py > scripts/.vimeo_baseline.py
+          python3 scripts/.vimeo_baseline.py --check
+      - name: Inspect current counts without logging video details or writing files
+        env:
+          VIMEO_ACCESS_TOKEN: ${{ secrets.VIMEO_ACCESS_TOKEN }}
+          VIMEO_USER_ID: ${{ vars.VIMEO_USER_ID }}
+        run: python3 scripts/sync_vimeo.py --check --diagnose
