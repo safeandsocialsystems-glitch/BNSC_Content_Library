@@ -1,6 +1,6 @@
 # Vimeo自動同期：初期設定から公開まで
 
-現在は未公開です。このフォルダーにはGitリポジトリ・公開先・APIトークンがありません。GitHub ActionsからVimeo公式APIを読み、正常に全件検証できた場合だけGitHub Pagesへ配信する構成です。トークン設定前のため実Vimeo接続は未検証です。
+現在は未公開です。このフォルダーにはGitリポジトリ・公開先・APIトークンがありません。GitHub ActionsからVimeo公式APIを読み、正常に全件検証できた場合だけGitHub Pagesへ配信する構成です。2026年10月27日に実Vimeo API接続を検証済みです。BNSCタグ付き2件を検出しました。Pagesは未公開です。
 
 ## 1. 同期・公開ルール
 
@@ -105,9 +105,19 @@ VIMEO_USER_ID=自分の数値ID python3 scripts/sync_vimeo.py --token-file /公�
 
 ## 検証状況
 
-- 自動テスト：29件成功。合成データでタグ承認、除外、変更反映、ID重複、途中失敗、権限不足、別アカウント、ページ欠落、秘密情報除外、CSV共存、最後の動画削除を検証。
+- 自動テスト：30件成功。合成データでタグ承認、除外、変更反映、ID重複、途中失敗、権限不足、別アカウント、ページ欠落、秘密情報除外、CSV共存、最後の動画削除を検証。
 - ブラウザ確認：デモによる日本語検索、カテゴリー絞り込み、保存・解除、390px幅、Vimeo由来カードのリンク非表示を確認。確認中のJavaScriptエラーログは0件。本番JSONは0件のままです。
-- 実Vimeo API接続：**未実施**。トークン設定後に上記手順6で実施してください。
+- 実Vimeo API接続：**成功**。2026年10月27日、設定アカウントと所有者の一致、public/private権限、278動画・3ページ（限定公開199件）、BNSC完全一致2件を確認しました。検索用変換も2件成功。
 - GitHub上の定期実行・Pagesデプロイ：**未実施**。リポジトリ設定とユーザーの公開判断後に有効化します。
 
 公式資料：[Vimeoトークン作成](https://help.vimeo.com/hc/en-us/articles/12427789081745-How-to-generate-a-personal-access-token)、[Vimeo API](https://developer.vimeo.com/api/reference/videos)、[GitHub Pagesワークフロー](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)、[定期実行の制約](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+
+## 2026年10月27日：BNSCが0件になる事象の調査
+
+- 22:35 JSTの接続テストは0件でした（run 40513294993）。当時のログには動画総数・タグ集計がなく、0件の直接原因を確定できません。
+- 22:47 JSTの集計診断では278件を3ページで取得し、全所有者が設定IDと一致。限定公開199件、タグ付き5件、BNSC完全一致2件でした。大小文字・NFKC正規化でも2件で、表記ゆれは検出されませんでした。
+- 22:48 JSTに初期コミットのコードをそのまま実APIで実行してもBNSC2件。現行コードも2件でした。現在、元の判定ロジックの不具合は再現していません。
+- タグ保存と最初のテストの実行順序、Vimeo APIへの反映遅延等は原因候補ですが、記録不足のため断定しません。検出成功を「原因を特定して修正した」とは扱いません。
+- 今回の変更は診断強化です。通常の接続テストにも `--check --diagnose` を追加し、所有者一致・スコープ・ページ数・取得数・タグ一致数を出します。タグ名・タイトル・ID・URL・ハッシュ・トークンは診断ログに出しません。診断モードはcheck必須で、検索JSONを書きません。
+- Actionsの **Diagnose Vimeo detection (no publishing)** は初期コードと現行コードを比較します。読み取り専用で、公開処理・アーティファクトアップロードはありません。
+- 実行結果：[診断](https://github.com/safeandsocialsystems-glitch/BNSC_Content_Library/actions/runs/40515154381)、[元コードとの比較](https://github.com/safeandsocialsystems-glitch/BNSC_Content_Library/actions/runs/40515330648)。
