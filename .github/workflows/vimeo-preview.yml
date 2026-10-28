@@ -1,0 +1,36 @@
+name: Encrypted local Vimeo preview (no publishing)
+on:
+  workflow_dispatch:
+    inputs:
+      recipient_certificate:
+        description: Base64 PEM public certificate for local decryption
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  preview:
+    if: vars.BNSC_PUBLISH_ENABLED == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Generate sanitized search metadata
+        env:
+          VIMEO_ACCESS_TOKEN: ${{ secrets.VIMEO_ACCESS_TOKEN }}
+          VIMEO_USER_ID: ${{ vars.VIMEO_USER_ID }}
+        run: python3 scripts/sync_vimeo.py
+      - name: Encrypt metadata for this Mac only
+        env:
+          RECIPIENT_CERTIFICATE: ${{ inputs.recipient_certificate }}
+        run: |
+          printf '%s' "$RECIPIENT_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/recipient.pem"
+          openssl cms -encrypt -binary -aes256 -in data/contents.json -out "$RUNNER_TEMP/preview.enc" -outform DER "$RUNNER_TEMP/recipient.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-local-preview
+          path: ${{ runner.temp }}/preview.enc
+          retention-days: 1

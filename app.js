@@ -92,6 +92,15 @@ function friendlyDate(date) {
 function cardFor(item) {
   const articleUrl = item.source === 'vimeo' ? '' : safeArticleUrl(item.url);
   const card=htmlEl('article','content-card');
+  try {
+    const thumbnail = new URL(item.thumbnail_url || '');
+    if (thumbnail.protocol === 'https:' && thumbnail.hostname === 'i.vimeocdn.com' && thumbnail.pathname.startsWith('/video/') && !thumbnail.search && !thumbnail.hash && !thumbnail.username && !thumbnail.password && !thumbnail.port) {
+      const image = htmlEl('img', 'card-thumbnail');
+      image.src = thumbnail.href; image.alt = ''; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
+      image.addEventListener('error', () => image.remove(), {once:true});
+      card.append(image);
+    }
+  } catch { /* Optional thumbnail; older CSV records remain compatible. */ }
   const top=htmlEl('div','card-top');
   top.append(htmlEl('span','format-badge'+(item.type==='研究解説'?' article':''),item.type));
   top.append(htmlEl('span','category-badge',item.category));
@@ -164,7 +173,7 @@ async function initialize() {
       category:CATEGORIES.includes(it.category)?it.category:'脳機能・神経科学',
       summary:String(it.summary||''),tags:Array.isArray(it.tags)?it.tags.map(String):[],
       keywords:Array.isArray(it.keywords)?it.keywords.map(String):[],
-      duration_minutes:Math.max(0,Number(it.duration_minutes)||0),published_at:String(it.published_at||''),url:String(it.url||''),order:index
+      thumbnail_url:String(it.thumbnail_url||''),duration_minutes:Math.max(0,Number(it.duration_minutes)||0),published_at:String(it.published_at||''),url:String(it.url||''),order:index
     }));
     $('demo-notice').hidden=!state.demo;
     render();
