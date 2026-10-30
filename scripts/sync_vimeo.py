@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vimeo -> public search metadata. No API responses or playback data persisted."""
+"""Vimeo -> public search metadata. Playback export is explicit; API credentials are never exported."""
 import argparse
 import html
 import json
@@ -190,7 +190,28 @@ def convert(video, owner, token, additional_secrets=()):
                 published_at=published, thumbnail_url=thumbnail, url='')
 
 
-def collect(client, account_id, diagnose=False):
+def playback_url(video, token):
+    """Export only the approved Vimeo embed URL, never raw API responses."""
+    ident = video_id(video)
+    raw = video.get('player_embed_url', '')
+    if not isinstance(raw, str) or not raw or (token and token in raw):
+        raise SyncError('再生URLが未設定または不正です。')
+    parts = urlsplit(raw)
+    if (parts.scheme != 'https' or parts.netloc != 'player.vimeo.com'
+            or parts.path != '/video/' + ident or parts.fragment):
+        raise SyncError('再生URLの取得元が不正です。')
+    hashes = parse_qs(parts.query, keep_blank_values=True).get('h', [])
+    if len(hashes) > 1 or (hashes and not re.fullmatch(r'[A-Za-z0-9]+', hashes[0])):
+        raise SyncError('再生パラメーターが不正です。')
+    # Known unlisted hash must not silently be lost, otherwise the player fails.
+    expected = private_values(video, '')[1:]
+    if expected and (not hashes or any(h != hashes[0] for h in expected)):
+        raise SyncError('限定公開動画の再生パラメーターが一致しません。')
+    params = {'h': hashes[0], 'dnt': '1'} if hashes else {'dnt': '1'}
+    return 'https://player.vimeo.com/video/' + ident + '?' + urlencode(params)
+
+
+def collect(client, account_id, diagnose=False, include_playback=False):
     if not re.fullmatch(r'\d+', account_id):
         raise SyncError('VIMEO_USER_ID に自分の数値ユーザーIDを設定してください。')
     auth = client.get('/oauth/verify')
@@ -217,6 +238,11 @@ def collect(client, account_id, diagnose=False):
     encoded = json.dumps(items, ensure_ascii=False)
     if any(secret and secret in encoded for secret in secrets):
         raise SyncError('非公開情報の混入を検出しました。更新を停止します。')
+    if include_playback:
+        for item, video in zip(items, raw_videos):
+            item['embed_url'] = playback_url(video, client.token)
+        if client.token and client.token in json.dumps(items, ensure_ascii=False):
+            raise SyncError('認証情報の混入を検出しました。')
     return items
 
 
@@ -236,8 +262,8 @@ def atomic_write(path, data):
     temporary.replace(path)
 
 
-def synchronize(client, account_id, csv_path, output, check=False, diagnose=False):
-    items = collect(client, account_id, diagnose)
+def synchronize(client, account_id, csv_path, output, check=False, diagnose=False, include_playback=False):
+    items = collect(client, account_id, diagnose, include_playback)
     payload = merged_payload(csv_path, items)
     if not check:
         atomic_write(output, payload)
@@ -249,6 +275,7 @@ def main():
     parser.add_argument('--token-file', type=Path, help='公開フォルダー外のトークンファイル')
     parser.add_argument('--check', action='store_true', help='実API接続・全件検証のみ。ファイル変更なし')
     parser.add_argument('--diagnose', action='store_true', help='--check専用: 秘密情報を含まない集計のみ出力')
+    parser.add_argument('--include-playback', action='store_true', help='閲覧者に公開するVimeo埋め込みURLを含める')
     args = parser.parse_args()
     if args.diagnose and not args.check:
         raise SyncError('--diagnose は --check と併用してください。')
@@ -260,7 +287,7 @@ def main():
         token = resolved.read_text().strip()
     if not token:
         raise SyncError('VIMEO_ACCESS_TOKEN または --token-file が未設定です。')
-    payload = synchronize(Vimeo(token), os.environ.get('VIMEO_USER_ID', ''), ROOT / 'contents.csv', ROOT / 'data' / 'contents.json', args.check, args.diagnose)
+    payload = synchronize(Vimeo(token), os.environ.get('VIMEO_USER_ID', ''), ROOT / 'contents.csv', ROOT / 'data' / 'contents.json', args.check, args.diagnose, args.include_playback)
     print(f'Vimeo全件検証成功: BNSC {payload["vimeo_sync"]["count"]}件 / 検索対象 {len(payload["items"])}件 / ' + ('接続テストのみ' if args.check else '検索JSON更新完了'))
 
 

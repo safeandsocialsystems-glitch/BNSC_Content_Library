@@ -1,18 +1,13 @@
-name: Sync Vimeo and publish library
-
+name: Sync Vimeo and publish GitHub Pages (approval required)
 on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
-
-# Opt-in: do not deploy until the owner has reviewed and enabled publishing.
 permissions:
   contents: read
-
 concurrency:
   group: bnsc-pages
   cancel-in-progress: false
-
 jobs:
   build:
     if: vars.BNSC_PUBLISH_ENABLED == 'true'
@@ -23,20 +18,20 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Run tests
-        run: python3 -m unittest discover -s tests -v
-      - name: Fetch and validate all Vimeo pages, then update public search data
+      - run: python3 -m unittest discover -s tests -v
+      - name: Collect complete inventory and approved playback URLs
         env:
           VIMEO_ACCESS_TOKEN: ${{ secrets.VIMEO_ACCESS_TOKEN }}
           VIMEO_USER_ID: ${{ vars.VIMEO_USER_ID }}
-        run: python3 scripts/sync_vimeo.py
-      - name: Build only public files
-        run: python3 scripts/build_release.py --synced
-      - uses: actions/upload-pages-artifact@v4
+        run: python3 scripts/sync_vimeo.py --include-playback
+      - run: python3 scripts/build_release.py --synced
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+          retention-days: 1
   deploy:
     needs: build
+    if: vars.BNSC_PUBLISH_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -45,6 +40,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy validated search metadata
+      - name: Deploy only the successful snapshot
         id: deployment
         uses: actions/deploy-pages@v4

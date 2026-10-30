@@ -30,3 +30,12 @@ Populate `contents.csv` from the owner's own archive, verify each title and post
 - Fetch and validate the complete inventory before replacing public data; any failure keeps the last successful site. Valid empty snapshots must deploy so removal of the last BNSC tag works.
 - GitHub Actions runs hourly and deploys only `dist/` after successful sync. `VIMEO_ACCESS_TOKEN` is a GitHub Secret. Publishing is opt-in via `BNSC_PUBLISH_ENABLED=true`; do not enable it without the owner's explicit publishing confirmation.
 - Do not claim live Vimeo/Actions/Pages verification until credentials and hosting are configured and the real tests have run. See `VIMEO_SETUP.md`.
+
+## Owner-authorized simplification (2026-10-29; supersedes member-only and playback restrictions above)
+
+- Use GitHub Pages without login, passwords, Cloudflare, membership checks or revocation management. Anyone knowing the URL can search and watch.
+- Retain hourly exact BNSC tag synchronization, CSV workflow, design, search, categories and bookmarks.
+- Explicit `--include-playback` export includes a validated Vimeo player URL and the unlisted h parameter required for playback. These are intentionally visitor-visible under the owner's new policy. Never export API tokens, raw API responses or member data.
+- Default metadata-only exports remain free of playback information for compatibility.
+- Publish only dist after a fully successful sync. Failed sync preserves the prior deployment; valid empty snapshots remove all tagged videos.
+- Do not enable Pages, change BNSC_PUBLISH_ENABLED from false, push or deploy without the owner's further confirmation. See VIMEO_SETUP.md for the current procedure.

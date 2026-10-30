@@ -5,7 +5,7 @@ const CAMPFIRE_HOSTS = new Set(['community.camp-fire.jp', 'camp-fire.jp', 'www.c
 const CATEGORIES = ['すべて', 'トレーニング', 'リハビリ', '療育・発達支援', '脳機能・神経科学'];
 const TYPES = ['すべて', '動画', '研究解説'];
 const STORAGE_KEY = 'bnsc_saved_items_v1';
-const state = { items: [], demo: true, keyword: '', type: 'すべて', category: 'すべて', tag: '', onlySaved: false, sort: 'new', saved: new Set() };
+const state = { loadStatus: 'loading', loadError: '', items: [], demo: true, keyword: '', type: 'すべて', category: 'すべて', tag: '', onlySaved: false, sort: 'new', saved: new Set() };
 const $ = (id) => document.getElementById(id);
 const htmlEl = (tag, cls = '', value) => { const el = document.createElement(tag); if (cls) el.className = cls; if (value !== undefined) el.textContent = String(value); return el; };
 const normalize = (s) => String(s ?? '').normalize('NFKC').toLocaleLowerCase('ja-JP').replace(/[\s\u3000]+/g, ' ').trim();
@@ -93,8 +93,8 @@ function cardFor(item) {
   const articleUrl = item.source === 'vimeo' ? '' : safeArticleUrl(item.url);
   const card=htmlEl('article','content-card');
   try {
-    const thumbnail = new URL(item.thumbnail_url || '');
-    if (thumbnail.protocol === 'https:' && thumbnail.hostname === 'i.vimeocdn.com' && thumbnail.pathname.startsWith('/video/') && !thumbnail.search && !thumbnail.hash && !thumbnail.username && !thumbnail.password && !thumbnail.port) {
+    const thumbnail = new URL(item.thumbnail_url || '', window.location.href);
+    if ((thumbnail.protocol === 'https:' && thumbnail.hostname === 'i.vimeocdn.com' && thumbnail.pathname.startsWith('/video/') && !thumbnail.search && !thumbnail.hash && !thumbnail.username && !thumbnail.password && !thumbnail.port)) {
       const image = htmlEl('img', 'card-thumbnail');
       image.src = thumbnail.href; image.alt = ''; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
       image.addEventListener('error', () => image.remove(), {once:true});
@@ -119,7 +119,12 @@ function cardFor(item) {
   save.setAttribute('aria-label',item.title+' をあとで見る'+(state.saved.has(item.id)?'から削除':'に保存'));
   save.addEventListener('click',()=>{ if(state.saved.has(item.id)) state.saved.delete(item.id); else state.saved.add(item.id); storeSaved(); render(); });
   actions.append(save);
-  if(articleUrl) {
+  if(item.source === 'vimeo' && safeEmbedUrl(item)) {
+    const play=htmlEl('button','open-link play-button','動画を視聴');
+    play.type='button'; play.setAttribute('aria-label',item.title+' を視聴');
+    play.addEventListener('click',()=>openVideo(item,play));
+    actions.append(play);
+  } else if(articleUrl) {
     const link=htmlEl('a','open-link',item.type==='動画'?'動画を開く ↗':'記事を開く ↗');
     link.href=articleUrl;link.target='_blank';link.rel='noopener noreferrer';
     link.setAttribute('aria-label',item.title+' のCAMPFIRE投稿を開く（新しいタブ）');
@@ -130,6 +135,17 @@ function cardFor(item) {
   return card;
 }
 function render() {
+  if (state.loadStatus !== 'ready') {
+    $('result-count').textContent = state.loadStatus === 'error' ? '読み込みエラー' : '読み込み中';
+    $('empty-state').hidden = true;
+    $('results-grid').setAttribute('aria-busy', state.loadStatus === 'loading' ? 'true' : 'false');
+    if (state.loadStatus === 'error') {
+      const notice = htmlEl('p', 'load-error', '検索データを読み込めませんでした。' + state.loadError + ' 「画面を開く.html」を開き直してください。');
+      notice.setAttribute('role', 'alert');
+      $('results-grid').replaceChildren(notice);
+    }
+    return;
+  }
   renderFilters(); renderActiveFilters();
   const items=displayedItems();
   $('result-count').textContent = items.length+'件';
@@ -163,23 +179,70 @@ function wireUI() {
 async function initialize() {
   state.saved=readSaved(); readQuery(); wireUI();
   try {
-    const response = await fetch('./data/contents.json', {cache:'no-store'});
-    if (!response.ok) throw new Error('コンテンツデータを読み込めませんでした。');
-    const data=await response.json();
+    let data;
+    const embedded = document.getElementById('bnsc-embedded-data');
+    if (embedded) {
+      data = JSON.parse(embedded.textContent);
+    } else {
+      const response = await fetch('./data/contents.json', {cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if (!response.ok) throw new Error('コンテンツデータを取得できませんでした。');
+      data = await response.json();
+    }
     if(!data || !Array.isArray(data.items)) throw new Error('データ形式に問題があります。');
+    if (data.local_preview && (!Number.isInteger(data.local_preview.expected_items) || data.items.length !== data.local_preview.expected_items || !data.items.length)) {
+      throw new Error('保存版の動画件数が一致しません。');
+    }
     state.demo=Boolean(data.demo);
     state.items=data.items.map((it,index)=>({
       source:it.source === 'vimeo' ? 'vimeo' : 'csv',id:String(it.id||`item-${index}`),title:String(it.title||'タイトルなし'),type:TYPES.includes(it.type)?it.type:'動画',
       category:CATEGORIES.includes(it.category)?it.category:'脳機能・神経科学',
       summary:String(it.summary||''),tags:Array.isArray(it.tags)?it.tags.map(String):[],
       keywords:Array.isArray(it.keywords)?it.keywords.map(String):[],
-      thumbnail_url:String(it.thumbnail_url||''),duration_minutes:Math.max(0,Number(it.duration_minutes)||0),published_at:String(it.published_at||''),url:String(it.url||''),order:index
+      embed_url:String(it.embed_url||''),thumbnail_url:String(it.thumbnail_url||''),duration_minutes:Math.max(0,Number(it.duration_minutes)||0),published_at:String(it.published_at||''),url:String(it.url||''),order:index
     }));
     $('demo-notice').hidden=!state.demo;
+    state.loadStatus = 'ready';
     render();
   } catch (err) {
-    $('results-grid').setAttribute('aria-busy','false');
-    $('results-grid').replaceChildren(htmlEl('p','',`読み込みに失敗しました。${err.message} ローカルでは README の手順に従ってサーバーを起動してください。`));
+    state.loadStatus = 'error';
+    state.loadError = err instanceof SyntaxError ? '保存データの形式が壊れています。' : err.message;
+    render();
   }
+}
+function safeEmbedUrl(item) {
+  try {
+    if(!/^vimeo-\d+$/.test(item.id)) return '';
+    const url=new URL(item.embed_url);
+    if(url.protocol!=='https:' || url.host!=='player.vimeo.com' || url.pathname!=='/video/'+item.id.slice(6) || url.username || url.password || url.hash) return '';
+    const hashes=url.searchParams.getAll('h');
+    if(hashes.length>1 || (hashes.length && !/^[a-zA-Z0-9]+$/.test(hashes[0]))) return '';
+    const clean=new URL('https://player.vimeo.com/video/'+item.id.slice(6));
+    if(hashes.length) clean.searchParams.set('h',hashes[0]);
+    clean.searchParams.set('dnt','1');
+    return clean.href;
+  } catch { return ''; }
+}
+function openVideo(item, button) {
+  button.disabled=true;
+  document.getElementById('video-player')?.remove();
+  const dialog=htmlEl('dialog','video-player'); dialog.id='video-player';
+  const heading=htmlEl('h2','',item.title);
+  const close=htmlEl('button','player-close','閉じる'); close.type='button';
+  const status=htmlEl('p','','読み込み中…'); status.setAttribute('role','status');
+  close.addEventListener('click',()=>dialog.close());
+  dialog.addEventListener('close',()=>dialog.remove());
+  dialog.append(heading,close,status); document.body.append(dialog); dialog.showModal();
+  try {
+    const embedUrl=safeEmbedUrl(item);
+    if(!embedUrl) throw new Error('Invalid player');
+    if(!dialog.isConnected) return;
+    const frame=htmlEl('iframe','vimeo-video');
+    frame.src=embedUrl; frame.title=item.title;
+    frame.allow='autoplay; fullscreen; picture-in-picture'; frame.allowFullscreen=true;
+    frame.referrerPolicy='strict-origin-when-cross-origin';
+    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-presentation');
+    status.replaceWith(frame);
+  } catch { if(dialog.isConnected) status.textContent='動画を読み込めませんでした。時間をおいて再度お試しください。'; }
+  finally {button.disabled=false;}
 }
 initialize();

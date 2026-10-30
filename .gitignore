@@ -9,3 +9,13 @@ __pycache__/
 *.key
 dist/
 *.json.tmp
+
+# Real metadata embedded in local-only preview
+/画面を開く.html
+
+.member-assets/
+.wrangler/
+.dev.vars*
+private/
+members*.csv
+members*.json
